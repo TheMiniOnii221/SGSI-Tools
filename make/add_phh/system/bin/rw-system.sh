@@ -84,6 +84,14 @@ fixSPL() {
 	if [ -z "$Arelease" ] || [ -z "$spl" ];then
 		return 0
 	fi
+
+    # Found on Cubot Pocket 3: trustkernel work only on stock model name or AOSP GSI model name
+    if [ -f /vendor/bin/hw/android.hardware.keymaster@4.1-service.trustkernel ] && [ -f /proc/tkcore/tkcore_log ];then
+        setprop debug.phh.props.teed keymaster
+        # Process name is android.hardware.keymaster@4.1-service.trustkernel
+        setprop debug.phh.props.ice.trustkernel keymaster
+    fi
+
         setprop ro.keymaster.brn Android
 
         if getprop ro.vendor.build.fingerprint |grep -qiE 'samsung.*star.*lte';then
@@ -147,7 +155,7 @@ changeKeylayout() {
     fi
 
     if getprop ro.vendor.build.fingerprint | grep -iq \
-        -e poco/ -e redmi/ -e xiaomi/ ; then
+        -e poco/ -e POCO/ -e redmi/ -e xiaomi/ ; then
         if [ ! -f /mnt/phh/keylayout/uinput-goodix.kl ]; then
           cp /system/phh/empty /mnt/phh/keylayout/uinput-goodix.kl
           chmod 0644 /mnt/phh/keylayout/uinput-goodix.kl
@@ -392,9 +400,9 @@ if getprop ro.vendor.build.fingerprint | grep -iq \
     setprop persist.sys.qcom-brightness -1
 fi
 
-# Lenovo Z5s brightness flickers without this setting
+# Lenovo Z5s & Xiaomi Mi10TLite brightness flickers without this setting
 if getprop ro.vendor.build.fingerprint | grep -iq \
-    -e Lenovo/jd2019; then
+    -e Lenovo/jd2019 -e Xiaomi/gauguin -e Redmi/gauguin; then
     setprop persist.sys.qcom-brightness -1
 fi
 
@@ -424,7 +432,7 @@ if getprop ro.vendor.build.fingerprint | grep -q -i \
     -e xiaomi/nitrogen -e xiaomi/whyred -e xiaomi/platina \
     -e xiaomi/ysl -e nubia/nx60 -e nubia/nx61 -e xiaomi/tulip \
     -e xiaomi/lavender -e xiaomi/olive -e xiaomi/olivelite -e xiaomi/pine \
-    -e Redmi/lancelot -e Redmi/galahad; then
+    -e Redmi/lancelot -e Redmi/galahad -e POCO/evergreen; then
     setprop persist.sys.qcom-brightness "$(cat /sys/class/leds/lcd-backlight/max_brightness)"
 fi
 
@@ -457,7 +465,7 @@ if getprop ro.vendor.build.fingerprint | grep -iq \
     -e motorola/hannah -e motorola/james -e motorola/pettyl -e xiaomi/cepheus \
     -e xiaomi/grus -e xiaomi/cereus -e xiaomi/cactus -e xiaomi/raphael -e xiaomi/davinci \
     -e xiaomi/ginkgo -e xiaomi/willow -e xiaomi/laurel_sprout -e xiaomi/andromeda \
-    -e redmi/curtana -e redmi/picasso \
+    -e xiaomi/gauguin -e redmi/gauguin -e redmi/curtana -e redmi/picasso \
     -e bq/Aquaris_M10 ; then
     mount -o bind /mnt/phh/empty_dir /vendor/lib64/soundfx
     mount -o bind /mnt/phh/empty_dir /vendor/lib/soundfx
@@ -585,6 +593,9 @@ if getprop ro.vendor.build.fingerprint | grep -iq -e Redmi/rosemary \
     -e Redmi/secret -e Redmi/maltose; then
     setprop debug.sf.latch_unsignaled 1
     setprop debug.sf.enable_hwc_vds 0
+
+    # Exclude FP input devices
+    mount -o bind /system/phh/rosemary-excluded-input-devices.xml /system/etc/excluded-input-devices.xml
 fi
 
 if getprop ro.vendor.build.fingerprint | grep -iq -E -e 'huawei|honor' || getprop persist.sys.overlay.huawei | grep -iq -E -e 'true'; then
@@ -789,7 +800,7 @@ for abi in "" 64;do
     f=/vendor/lib$abi/libstagefright_foundation.so
     if [ -f "$f" ];then
         for vndk in 26 27 28 29;do
-            mount "$f" /system/apex/com.android.vndk.v$vndk/lib$abi/libstagefright_foundation.so
+            mount "$f" /system/system_ext/apex/com.android.vndk.v$vndk/lib$abi/libstagefright_foundation.so
         done
     fi
 done
@@ -975,22 +986,39 @@ fi
 
 resetprop_phh ro.bluetooth.library_name libbluetooth.so
 
-if getprop ro.vendor.build.fingerprint |grep -iq xiaomi/cepheus -e xiaomi/nabu;then
-    setprop ro.netflix.bsp_rev Q855-16947-1
+board="$(getprop ro.board.platform)"
+
+if [ "$board" = atoll ] || [ "$board" = sm6250 ]; then
+	setprop ro.netflix.bsp_rev Q6250-19132-1
 fi
 
-if getprop ro.vendor.build.fingerprint |grep -iq xiaomi/elish;then
-    setprop ro.netflix.bsp_rev Q8250-19134-1
+if [ "$board" = msmnile ]; then
+	setprop ro.netflix.bsp_rev Q855-16947-1
 fi
 
-if getprop ro.vendor.build.fingerprint |grep -qi redmi/curtana;then
-    setprop ro.netflix.bsp_rev Q6250-19132-1
+if [ "$board" = sm6150 ]; then
+	setprop ro.netflix.bsp_rev Q6150-17263-1
 fi
 
-if getprop ro.vendor.build.fingerprint |grep -iq xiaomi/renoir;then
-    setprop ro.netflix.bsp_rev Q875-32774-1
-    resetprop_phh ro.config.media_vol_steps 25
-    resetprop_phh ro.config.media_vol_default 15
+if [ "$board" = mt6768 ]; then
+	setprop ro.netflix.bsp_rev MTK6768-19055-1
+fi
+
+if [ "$board" = lahaina ]; then
+	setprop ro.netflix.bsp_rev Q875-32774-1
+	resetprop_phh ro.config.media_vol_steps 25
+	resetprop_phh ro.config.media_vol_default 15
+fi
+
+if [ "$board" = universal8825 ];then
+	setprop ro.netflix.bsp_rev EXYNOS1280-34993-1
+fi
+
+if getprop ro.vendor.build.fingerprint |grep -qi Nokia/Phoenix;then
+    setprop ro.netflix.bsp_rev Q845-05000-1
+    setprop debug.sf.latch_unsignaled 1
+    setprop sys.use_fifo_ui 1
+    setprop media.settings.xml "/vendor/etc/media_profiles_vendor.xml"
 fi
 
 # Set props for Vsmart Live's fod
@@ -1109,53 +1137,3 @@ fi
 
 mount -o bind /mnt/phh/empty_dir /vendor/app/qti-logkit
 mount -o bind /mnt/phh/empty_dir /vendor/app/qti-logkit-lite
-
-# Display CutOut
-mount -o bind /mnt/phh/empty_dir /vendor/overlay/DisplayCutoutEmulationTall || true
-mount -o bind /mnt/phh/empty_dir /vendor/overlay/DisplayCutoutEmulationDouble || true
-mount -o bind /mnt/phh/empty_dir /vendor/overlay/DisplayCutoutEmulationCorner || true
-
-# lib binds
-mount -o bind /system/lib/vndk-"$vndk"/libgui.so /vendor/lib/libgui_vendor.so || true
-mount -o bind /system/lib64/vndk-"$vndk"/libgui.so /vendor/lib64/libgui_vendor.so || true
-mount -o bind /system/lib/vndk-"$vndk"/libbinder.so /vendor/lib/libbinder.so || true
-mount -o bind /system/lib64/vndk-"$vndk"/libbinder.so /vendor/lib64/libbinder.so || true
-mount -o bind /system/lib/vndk-"$vndk"/libbinder.so /vendor/lib/vndk/libbinder.so || true
-mount -o bind /system/lib64/vndk-"$vndk"/libbinder.so /vendor/lib64/vndk/libbinder.so || true
-mount -o bind /system/lib/vndk-sp-"$vndk"/libcutils.so /vendor/lib/libcutils.so || true
-mount -o bind /system/lib64/vndk-sp-"$vndk"/libcutils.so /vendor/lib64/libcutils.so || true
-mount -o bind /system/lib/vndk-sp-"$vndk"/libcutils.so /vendor/lib/vndk-sp/libcutils.so || true
-mount -o bind /system/lib64/vndk-sp-"$vndk"/libcutils.so /vendor/lib64/vndk-sp/libcutils.so || true
-mount -o bind /system/lib/libpdx_default_transport.so /vendor/lib/libpdx_default_transport.so || true
-mount -o bind /system/lib64/libpdx_default_transport.so /vendor/lib64/libpdx_default_transport.so || true
-mount -o bind /system/lib/libpdx_default_transport.so /vendor/lib/vndk/libpdx_default_transport.so || true
-mount -o bind /system/lib64/libpdx_default_transport.so /vendor/lib64/vndk/libpdx_default_transport.so || true
-
-# Drop qcom stuffs for non qcom devices
-if ! getprop ro.hardware | grep -qiE -e qcom -e mata;then
-    mount -o bind /mnt/phh/empty_dir /system/app/imssettings || true
-    mount -o bind /mnt/phh/empty_dir /system/priv-app/ims || true
-    mount -o bind /mnt/phh/empty_dir /system/app/ims || true
-    mount -o bind /mnt/phh/empty_dir /system/app/QtiTelephonyService || true
-    mount -o bind /mnt/phh/empty_dir /system/app/datastatusnotification || true
-fi
-
-# Fix no Earpiece in audio_policy
-for f in \
-    /odm/etc/audio_policy_configuration.xml \
-    /vendor/etc/audio_policy_configuration.xml; do
-    [ ! -f "$f" ] && continue
-    if ! grep -q "<item>Earpiece</item>" "$f"; then
-        # shellcheck disable=SC2010
-        ctxt="$(ls -lZ "$f" | grep -oE 'u:object_r:[^:]*:s0')"
-        b="$(echo "$f" | tr / _)"
-        cp -a "$f" "/mnt/phh/$b"
-        sed -i "s|<attachedDevices>|<attachedDevices><item>Earpiece</item>|g" "/mnt/phh/$b"
-        chcon "$ctxt" "/mnt/phh/$b"
-        mount -o bind "/mnt/phh/$b" "$f"
-    fi
-done
-
-frp_node="$(getprop ro.frp.pst)"
-chown -h system.system $frp_node
-chmod 0660 $frp_node
